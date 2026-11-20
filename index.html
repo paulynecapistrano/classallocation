@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ClassAllocation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --paper:#EDF1EE; --surface:#FAFCFB; --ink:#14231F; --muted:#56665F; --rule:#CAD5CF; --rule-strong:#97A9A0;
+  --accent:#1E6B55; --accent-ink:#FFFFFF; --accent-soft:#DCEBE3; --credit:#94461A; --bad:#A3361F; --bad-soft:#F7E4DC;
+  --row-active:#E2EEE7; --focus:#2F8A6E;
+  --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --cond:"IBM Plex Sans Condensed", "Arial Narrow", "IBM Plex Sans", system-ui, sans-serif;
+  color-scheme: light;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F1714; --surface:#16211D; --ink:#E3ECE7; --muted:#93A59D; --rule:#2A3933; --rule-strong:#4A5F56;
+    --accent:#5DBE9A; --accent-ink:#0B1411; --accent-soft:#1B3A2F; --credit:#E39D6E; --bad:#F08B71; --bad-soft:#3A1F18;
+    --row-active:#1E302A; --focus:#7AD3B1; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F1714; --surface:#16211D; --ink:#E3ECE7; --muted:#93A59D; --rule:#2A3933; --rule-strong:#4A5F56;
+  --accent:#5DBE9A; --accent-ink:#0B1411; --accent-soft:#1B3A2F; --credit:#E39D6E; --bad:#F08B71; --bad-soft:#3A1F18;
+  --row-active:#1E302A; --focus:#7AD3B1; color-scheme: dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto;padding:1.5rem clamp(1rem,3vw,2rem) 4rem}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:1rem 2rem;padding-bottom:1.25rem;border-bottom:2px solid var(--ink)}
+h1{font-family:var(--cond);font-weight:600;font-size:clamp(1.9rem,4vw,2.6rem);line-height:1.05;margin:0;letter-spacing:-0.01em}
+.tag{margin:.35rem 0 0;color:var(--muted);max-width:56ch}
+nav.steps{display:flex;gap:0;border:1px solid var(--rule-strong);border-radius:6px;overflow:hidden;background:var(--surface)}
+.step-btn{font:inherit;font-size:.9rem;border:0;background:transparent;color:var(--ink);padding:.55rem .95rem;cursor:pointer;display:flex;gap:.5rem;align-items:center;border-right:1px solid var(--rule)}
+.step-btn:last-child{border-right:0}
+.step-btn .n{display:inline-grid;place-items:center;width:1.4rem;height:1.4rem;border-radius:50%;border:1px solid var(--rule-strong);font-size:.75rem;font-weight:600}
+.step-btn[aria-current="step"]{background:var(--accent);color:var(--accent-ink)}
+.step-btn[aria-current="step"] .n{border-color:currentColor}
+.step-btn:disabled{color:var(--muted);cursor:not-allowed;opacity:.6}
+main{padding-top:1.5rem}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.muted{color:var(--muted)} .small{font-size:.85rem} .strong{font-weight:600} .pad{padding:1rem}
+.btn{font:inherit;font-size:.9rem;font-weight:500;display:inline-flex;align-items:center;gap:.4rem;padding:.5rem .9rem;border-radius:5px;border:1px solid var(--rule-strong);background:var(--surface);color:var(--ink);cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.small{padding:.3rem .65rem;font-size:.82rem}
+.linklike{font:inherit;background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.icon{font:inherit;background:none;border:0;color:var(--muted);cursor:pointer;padding:.25rem .4rem;border-radius:4px}
+.icon:hover{color:var(--bad)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.row-gap{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.push{margin-left:auto}
+.error{color:var(--bad);background:var(--bad-soft);padding:.6rem .8rem;border-radius:5px;margin:.75rem 0}
+.note{background:var(--accent-soft);padding:.6rem .8rem;border-radius:5px;font-size:.9rem;margin:.75rem 0}
+.good{color:var(--accent)} .bad{color:var(--bad)}
+
+/* upload */
+.drop{border:1.5px dashed var(--rule-strong);border-radius:10px;background:var(--surface);transition:border-color .15s, background .15s}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop-inner{display:flex;flex-direction:column;align-items:flex-start;gap:.5rem;padding:clamp(2rem,6vw,3.5rem) clamp(1.25rem,5vw,3rem);cursor:pointer}
+.drop-title{font-family:var(--cond);font-size:1.5rem;font-weight:600}
+.drop-sub{color:var(--muted);margin-bottom:.5rem}
+.filebar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:1rem;padding:1rem 1.1rem;background:var(--surface);border:1px solid var(--rule);border-radius:8px}
+.filename{font-weight:600;font-size:1.05rem}
+
+/* tables */
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.grid{border-collapse:collapse;width:100%;background:var(--surface);font-size:.88rem}
+.grid th{font-weight:600;font-size:.8rem;color:var(--muted);text-align:right;padding:.55rem .75rem;border-bottom:1px solid var(--rule-strong);white-space:nowrap;position:sticky;top:0;background:var(--surface)}
+.grid td{padding:.45rem .75rem;border-bottom:1px solid var(--rule);text-align:right;white-space:nowrap}
+.grid .l{text-align:left}
+.grid .num{text-align:right}
+.grid tr.sec td{font-family:var(--cond);font-weight:600;color:var(--ink);background:var(--paper);text-align:left;padding-top:.7rem;border-bottom:1px solid var(--rule-strong)}
+.grid tr.tot td{font-weight:600;border-top:1px solid var(--ink);border-bottom:3px double var(--ink)}
+.filebar + .error + p + .scroll, .split .scroll{border:1px solid var(--rule);border-radius:6px}
+.filebar ~ .scroll{border:1px solid var(--rule);border-radius:6px;margin-top:.5rem;max-height:70vh}
+
+/* rules */
+.toolbar{display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:flex-end;margin-bottom:1rem}
+.field{display:flex;flex-direction:column;gap:.3rem;font-size:.85rem;color:var(--muted);margin:.75rem 0}
+.field.inline{margin:0}
+.field.grow{flex:1;min-width:14rem}
+select,.txt,.pct{font:inherit;font-size:.92rem;color:var(--ink);background:var(--surface);border:1px solid var(--rule-strong);border-radius:5px;padding:.42rem .55rem;min-width:0}
+select{max-width:100%}
+.check{display:flex;align-items:center;gap:.45rem;font-size:.9rem;cursor:pointer}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
+.bases{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:.75rem 1rem;margin-bottom:1.25rem}
+.bases summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:.25rem 1rem;align-items:baseline}
+.bases summary > span:first-child{font-weight:600}
+.bases-body,#bases-body{padding-top:.75rem}
+#bases-body .btn{margin-top:.75rem}
+.bases-table .pct{width:5.5rem;text-align:right}
+.bases-table .txt{width:12rem}
+.split{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:1.25rem;align-items:start}
+@media (max-width:900px){.split{grid-template-columns:1fr}}
+.bulkbar{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;min-height:2.4rem;margin-bottom:.5rem}
+.accts td.cb,.accts th.cb{width:2.2rem;text-align:center;padding-right:0}
+.accts tr.acct{cursor:default}
+.accts tr.acct:hover td{background:var(--row-active)}
+.accts tr.active td{background:var(--row-active)}
+.accts tr.active td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.acct-btn{font:inherit;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;text-align:left;white-space:normal}
+.accts td.l{white-space:normal;min-width:12rem}
+.rule-cell{text-align:left !important;white-space:normal !important;min-width:9rem}
+.dot{display:inline-block;width:.55rem;height:.55rem;border-radius:50%;margin-right:.45rem;background:var(--rule-strong);vertical-align:middle}
+.dot.good{background:var(--accent)} .dot.bad{background:var(--bad)} .dot.idle{background:var(--rule-strong)}
+.editor{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:1rem 1.15rem 1.25rem;position:sticky;top:calc(env(safe-area-inset-top,0px) + 1rem)}
+@media (max-width:900px){.editor{position:static}}
+.ed-head h3{font-family:var(--cond);font-weight:600;font-size:1.35rem;margin:.1rem 0 .75rem;line-height:1.2;word-break:break-word}
+.methods{border:0;padding:0;margin:0 0 .25rem;display:flex;flex-wrap:wrap;gap:.35rem}
+.seg{font-size:.85rem;border:1px solid var(--rule-strong);border-radius:20px;padding:.3rem .75rem;cursor:pointer;display:inline-flex;align-items:center}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.seg:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+.pct-grid{display:flex;flex-direction:column;margin:.75rem 0 .5rem;border-top:1px solid var(--rule)}
+.pct-row{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.35rem 0;border-bottom:1px solid var(--rule)}
+.pct-row.total{font-weight:600;border-bottom:3px double var(--ink)}
+.pct-wrap{display:inline-flex;align-items:center;gap:.3rem}
+.pct-row .pct{width:6.5rem;text-align:right}
+.targets{border:1px solid var(--rule);border-radius:6px;padding:.5rem .8rem .6rem;margin:.5rem 0}
+.targets legend{font-size:.85rem;color:var(--muted);padding:0 .3rem}
+.targets .check{padding:.2rem 0}
+.num-inline{margin-left:auto}
+#preview h4{font-size:.85rem;color:var(--muted);font-weight:600;margin:1.25rem 0 .4rem}
+.preview{font-size:.85rem}
+.dr{color:var(--accent)} .cr{color:var(--credit)}
+.footer-nav{display:flex;justify-content:space-between;gap:1rem;margin-top:1.75rem;padding-top:1rem;border-top:1px solid var(--rule)}
+
+/* journal entry */
+.je-head{display:flex;flex-wrap:wrap;gap:0 1rem;align-items:flex-end;margin-bottom:.5rem}
+.je-head .field{margin:.25rem 0 .75rem}
+.ledger{background:var(--surface);border:1px solid var(--rule-strong);border-radius:8px;overflow:hidden;
+  background-image:linear-gradient(var(--surface),var(--surface))}
+.ledger-top{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;padding:1rem 1.15rem .85rem;border-bottom:2px solid var(--ink)}
+.je-title{font-family:var(--cond);font-weight:600;font-size:1.6rem;line-height:1.1}
+.balance{font-weight:600;font-size:.9rem;padding:.3rem .7rem;border-radius:20px;background:var(--accent-soft)}
+.balance.bad{background:var(--bad-soft)}
+table.je td:nth-child(3),table.je td:nth-child(4),table.je th:nth-child(3),table.je th:nth-child(4){border-left:1px solid var(--rule);min-width:8.5rem}
+table.je tr.grp td{border-top:1px solid var(--rule-strong)}
+table.je td.l.muted{white-space:normal;min-width:12rem}
+.actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.1rem 0}
+.issues{background:var(--bad-soft);border-radius:8px;padding:.8rem 1rem;margin-bottom:1rem;font-size:.9rem}
+.issues ul{margin:.4rem 0 0;padding-left:1.1rem}
+.empty{background:var(--surface);border:1px dashed var(--rule-strong);border-radius:8px;padding:2rem;text-align:center}
+.names{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem}
+.names summary{cursor:pointer;font-weight:600}
+.names-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(16rem,1fr));gap:0 1rem}
+button.seg{font:inherit;font-size:.85rem;background:none;color:inherit}
+.view-toggle{margin:0;align-items:center}
+.pl-scroll{border:1px solid var(--rule);border-radius:6px;max-height:75vh;margin-top:.75rem}
+.pl td.l:first-child{position:sticky;left:0;background:var(--surface);z-index:1}
+.pl th:first-child{left:0;z-index:3}
+.pl tr.chg td.hit{background:var(--accent-soft)}
+.pl tr.total td{font-weight:600;border-top:1px solid var(--rule-strong)}
+.pl tr.calc td{font-weight:600;border-top:1px solid var(--ink)}
+.pl tr.net td{font-weight:600;border-top:1px solid var(--ink);border-bottom:3px double var(--ink)}
+.owner{text-align:right;font-size:.8rem;color:var(--muted);margin-top:2.5rem}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 1.25rem);transform:translate(-50%,1rem);opacity:0;background:var(--ink);color:var(--surface);padding:.6rem 1rem;border-radius:6px;font-size:.9rem;pointer-events:none;transition:opacity .2s, transform .2s;max-width:calc(100% - 2rem)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.bad{background:var(--bad);color:#fff}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;scroll-behavior:auto !important}}
+@media (max-width:640px){
+  .step-btn .lbl{display:none}
+  .step-btn[aria-current="step"] .lbl{display:inline}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1 id="app-title">Class allocation</h1>
+      <p class="tag">Upload a P&amp;L by class or location, set how each account is split, and get a balanced journal entry ready to import into QuickBooks.</p>
+    </div>
+    <nav class="steps" aria-label="Steps">
+      <button class="step-btn" data-step="1"><span class="n">1</span><span class="lbl">Upload P&amp;L</span></button>
+      <button class="step-btn" data-step="2" disabled><span class="n">2</span><span class="lbl">Allocation rules</span></button>
+      <button class="step-btn" data-step="3" disabled><span class="n">3</span><span class="lbl">Journal entry</span></button>
+      <button class="step-btn" data-step="4" disabled><span class="n">4</span><span class="lbl">Updated P&amp;L</span></button>
+    </nav>
+  </header>
+  <main>
+    <section class="panel" data-step="1" id="panel-1"></section>
+    <section class="panel" data-step="2" id="panel-2" hidden></section>
+    <section class="panel" data-step="3" id="panel-3" hidden></section>
+    <section class="panel" data-step="4" id="panel-4" hidden></section>
+  </main>
+  <footer class="owner">Created by: Paulyne R. Capistrano</footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+// ---------- Core logic (pure) ----------
+const SECTION_MAP = {
+  'income': 'credit', 'ordinary income/expenses': null, 'ordinary income/expense': null,
+  'revenue': 'credit', 'revenues': 'credit',
+  'cost of goods sold': 'debit', 'cost of sales': 'debit', 'cogs': 'debit',
+  'expenses': 'debit', 'expense': 'debit', 'operating expenses': 'debit',
+  'other income': 'credit', 'other expenses': 'debit', 'other expense': 'debit',
+  'other income/expense': null, 'other income/expenses': null, 'other income (expense)': null
+};
+const SKIP_ROWS = new Set(['gross profit', 'net operating income', 'net other income', 'net income',
+  'net ordinary income', 'net other income/expense', 'net other income (expense)', 'net revenue']);
+const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+
+function parseAmount(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  let s = String(v).trim();
+  if (!s) return null;
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  s = s.replace(/[$,\s]/g, '');
+  if (s.startsWith('-')) { neg = !neg; s = s.slice(1); }
+  if (!/^\d*\.?\d+$/.test(s)) return null;
+  const n = parseFloat(s);
+  return neg ? -n : n;
+}
+
+function guessEndDate(text) {
+  const lower = text.toLowerCase();
+  let lastMonth = -1, lastPos = -1;
+  MONTHS.forEach((m, i) => {
+    const re = new RegExp('\\b' + m.slice(0, 3) + '[a-z]*\\.?\\b', 'g');
+    let mm; while ((mm = re.exec(lower))) { if (mm.index > lastPos) { lastPos = mm.index; lastMonth = i; } }
+  });
+  const years = lower.match(/\b(19|20)\d{2}\b/g);
+  if (lastMonth < 0 || !years) return null;
+  const y = parseInt(years[years.length - 1], 10);
+  const d = new Date(Date.UTC(y, lastMonth + 1, 0));
+  return d.toISOString().slice(0, 10);
+}
+
+function cellText(c) { return c === null || c === undefined ? '' : String(c).trim(); }
+
+function parsePL(aoa) {
+  let h = -1, totalCol = -1;
+  for (let i = 0; i < Math.min(aoa.length, 40); i++) {
+    const r = aoa[i] || [];
+    const idx = r.findIndex((c, j) => j > 0 && cellText(c).toLowerCase() === 'total');
+    const nonEmpty = r.slice(1).filter(c => cellText(c) !== '').length;
+    if (idx > 0 && nonEmpty >= 2) { h = i; totalCol = idx; break; }
+  }
+  if (h < 0) {
+    // Fallback: first row with an empty first cell and 2+ text headers, followed by a row with numbers
+    for (let i = 0; i < Math.min(aoa.length, 40); i++) {
+      const r = aoa[i] || [];
+      const texts = r.slice(1).filter(c => cellText(c) !== '' && parseAmount(c) === null);
+      if (cellText(r[0]) === '' && texts.length >= 2) { h = i; break; }
+    }
+  }
+  if (h < 0) throw new Error('No header row found. Run "Profit and Loss by Class" or "Profit and Loss by Location" in QuickBooks and export it to Excel or CSV without changing the layout.');
+  const header = aoa[h];
+  const classCols = [];
+  for (let j = 1; j < header.length; j++) {
+    if (j === totalCol) continue;
+    if (totalCol >= 0 && j > totalCol) continue;
+    const t = cellText(header[j]);
+    if (t) classCols.push({ name: t, col: j });
+  }
+  if (!classCols.length) throw new Error('The header row has no class or location columns.');
+  const firstValCol = Math.min(...classCols.map(c => c.col), totalCol >= 0 ? totalCol : Infinity);
+
+  let period = '', dimension = null;
+  for (let i = 0; i < h; i++) {
+    const tx = (aoa[i] || []).map(cellText).join(' ');
+    if (!dimension && /\bby\s+class\b/i.test(tx)) dimension = 'class';
+    if (!dimension && /\bby\s+(location|department|division|property|store|territory|business|region)\b/i.test(tx)) dimension = 'location';
+  }
+  for (let i = 0; i < h; i++) {
+    const t = (aoa[i] || []).map(cellText).filter(Boolean).join(' ');
+    if (/\b(19|20)\d{2}\b/.test(t) && guessEndDate(t)) { period = t; break; }
+  }
+
+  const stack = [];
+  const accounts = [];
+  const popTo = (nm) => {
+    const target = nm.trim().toLowerCase();
+    for (let k = stack.length - 1; k >= 0; k--) {
+      if (stack[k].name.toLowerCase() === target) { stack.length = k; return; }
+    }
+  };
+  for (let i = h + 1; i < aoa.length; i++) {
+    const r = aoa[i] || [];
+    let name = '';
+    for (let j = 0; j < firstValCol && j < r.length; j++) { const t = cellText(r[j]); if (t) { name = t; break; } }
+    if (!name) continue;
+    const lower = name.toLowerCase();
+    const values = {}; let any = false;
+    for (const c of classCols) {
+      const v = parseAmount(r[c.col]);
+      if (v !== null) any = true;
+      values[c.name] = v || 0;
+    }
+    const tot = totalCol >= 0 ? parseAmount(r[totalCol]) : null;
+    if (tot !== null) any = true;
+    if (lower.startsWith('total ')) { popTo(name.slice(6)); continue; }
+    if (SKIP_ROWS.has(lower)) continue;
+    if (!any) {
+      if (Object.prototype.hasOwnProperty.call(SECTION_MAP, lower)) stack.push({ name, section: true, nature: SECTION_MAP[lower] });
+      else stack.push({ name, section: false });
+      continue;
+    }
+    let sectionIdx = -1;
+    for (let k = stack.length - 1; k >= 0; k--) if (stack[k].section && stack[k].nature) { sectionIdx = k; break; }
+    const section = sectionIdx >= 0 ? stack[sectionIdx].name : 'Unsorted';
+    const nature = sectionIdx >= 0 ? stack[sectionIdx].nature : 'debit';
+    const parents = stack.slice(sectionIdx + 1).filter(s => !s.section).map(s => s.name);
+    let fullName = parents.length && parents[parents.length - 1].toLowerCase() === lower
+      ? parents.join(':') : [...parents, name].join(':');
+    const total = classCols.reduce((s, c) => s + values[c.name], 0);
+    accounts.push({ id: 'a' + accounts.length, name, fullName, section, nature, values, total, depth: parents.length });
+  }
+  if (!accounts.length) throw new Error('No account rows with amounts were found under the header row.');
+  return {
+    classes: classCols.map(c => c.name), accounts, period, dimension,
+    defaultDate: period ? guessEndDate(period) : null
+  };
+}
+
+function sectionTotals(accounts, classes) {
+  const out = {};
+  for (const a of accounts) {
+    if (!out[a.section]) { out[a.section] = {}; classes.forEach(c => out[a.section][c] = 0); }
+    classes.forEach(c => out[a.section][c] += a.values[c] || 0);
+  }
+  return out;
+}
+
+function driverValues(key, ctx) {
+  if (key && key.startsWith('section:')) return ctx.sectionTotals[key.slice(8)] || null;
+  if (key && key.startsWith('acct:')) {
+    const a = ctx.accounts.find(x => x.fullName === key.slice(5));
+    return a ? a.values : null;
+  }
+  return null;
+}
+
+function sumVals(o) { return Object.values(o).reduce((s, v) => s + (Number(v) || 0), 0); }
+
+function computeAllocation(acc, rule, ctx) {
+  if (!rule || !rule.method || rule.method === 'none') return { status: 'none' };
+  const classes = ctx.classes;
+  const src = rule.source;
+  if (!src) return { status: 'error', error: `Pick the ${DIM().one} to allocate from.` };
+  if (src !== '__ALL__' && !classes.includes(src)) return { status: 'error', error: `${DIM().One} "${src}" isn't in this P&L.` };
+  if (rule.method === 'amount') {
+    const amts = rule.amts || {};
+    const missingA = Object.keys(amts).filter(c => Number(amts[c]) && !classes.includes(c));
+    if (missingA.length) return { status: 'error', error: `Amounts use ${DIM().many} not in this P&L: ${missingA.join(', ')}.` };
+    const base = {}; classes.forEach(c => { base[c] = Math.round((acc.values[c] || 0) * 100); });
+    const Ac = src === '__ALL__' ? classes.reduce((t, c) => t + base[c], 0) : base[src];
+    const alloc = {}; let used = 0;
+    classes.forEach(c => { if (c === src) return; const v = Math.round((Number(amts[c]) || 0) * 100); if (v) { alloc[c] = v; used += v; } });
+    if (src === '__ALL__') {
+      if (used !== Ac) return { status: 'error', error: `Amounts total ${fmt(used / 100)}, but the account total is ${fmt(Ac / 100)}. They need to match.` };
+      if (Ac === 0) return { status: 'zero', A: 0, shares: {} };
+    } else {
+      if (Ac === 0) return { status: 'zero', A: 0, shares: {} };
+      if (!used) return { status: 'error', error: 'Enter at least one amount.' };
+      if (Math.abs(used) > Math.abs(Ac) || Math.sign(used) !== Math.sign(Ac)) return { status: 'error', error: `Amounts total ${fmt(used / 100)}, more than the ${fmt(Ac / 100)} available in ${src}.` };
+      alloc[src] = Ac - used;
+    }
+    const delta = {};
+    classes.forEach(c => { const before = src === '__ALL__' ? base[c] : (c === src ? Ac : 0); const d = (alloc[c] || 0) - before; if (d !== 0) delta[c] = d; });
+    const moved = src === '__ALL__' ? Ac : used;
+    return { status: 'ok', A: moved / 100, Acents: moved, alloc, delta, shares: {} };
+  }
+  let shares = {};
+  if (rule.method === 'single') {
+    if (!rule.single || !classes.includes(rule.single)) return { status: 'error', error: `Pick the ${DIM().one} to move the balance to.` };
+    shares[rule.single] = 1;
+  } else if (rule.method === 'percent' || rule.method === 'basis') {
+    let pcts;
+    if (rule.method === 'basis') {
+      const b = ctx.bases.find(x => x.id === rule.basisId);
+      if (!b) return { status: 'error', error: 'Pick an allocation basis.' };
+      pcts = b.pcts || {};
+    } else pcts = rule.pcts || {};
+    const missing = Object.keys(pcts).filter(c => Number(pcts[c]) && !classes.includes(c));
+    if (missing.length) return { status: 'error', error: `Basis uses ${DIM().many} not in this P&L: ${missing.join(', ')}.` };
+    const s = classes.reduce((t, c) => t + (Number(pcts[c]) || 0), 0);
+    if (Math.abs(s - 100) > 0.005) return { status: 'error', error: `Percentages add up to ${round2(s)}%, not 100%.` };
+    classes.forEach(c => { if (Number(pcts[c])) shares[c] = Number(pcts[c]) / 100; });
+  } else if (rule.method === 'driver') {
+    const targets = (rule.targets || []).filter(c => classes.includes(c));
+    if (!targets.length) return { status: 'error', error: `Pick at least one ${DIM().one} to receive the allocation.` };
+    const dv = driverValues(rule.driver, ctx);
+    if (!dv) return { status: 'error', error: 'Pick what to allocate in proportion to.' };
+    const s = targets.reduce((t, c) => t + (dv[c] || 0), 0);
+    if (Math.abs(s) < 0.005) return { status: 'error', error: `The driver has no amounts in the chosen ${DIM().many}.` };
+    targets.forEach(c => { if (dv[c]) shares[c] = dv[c] / s; });
+  } else return { status: 'error', error: 'Unknown method.' };
+
+  const baseCents = {};
+  classes.forEach(c => baseCents[c] = Math.round((acc.values[c] || 0) * 100));
+  const Ac = src === '__ALL__' ? classes.reduce((t, c) => t + baseCents[c], 0) : baseCents[src];
+  if (Ac === 0) return { status: 'zero', A: 0, shares };
+  let P = Ac;
+  if (src !== '__ALL__') {
+    P = portionCents(Ac, rule);
+    if (P === null) return { status: 'error', error: rule.portion === 'pct' ? 'Enter the percentage of the balance to allocate.' : 'Enter the amount to allocate.' };
+    if (rule.portion === 'pct' && (Number(rule.portionValue) < 0 || Number(rule.portionValue) > 100)) return { status: 'error', error: 'The percentage to allocate must be between 0 and 100.' };
+    if (Math.abs(P) > Math.abs(Ac)) return { status: 'error', error: `${fmt(Math.abs(P) / 100)} is more than the ${fmt(Ac / 100)} available in ${src}.` };
+    if (P === 0) return { status: 'zero', A: 0, shares };
+  }
+  const alloc = {}; let used = 0, big = null, bigAbs = -1;
+  for (const [c, sh] of Object.entries(shares)) {
+    alloc[c] = Math.round(sh * P); used += alloc[c];
+    if (Math.abs(sh) > bigAbs) { bigAbs = Math.abs(sh); big = c; }
+  }
+  if (big !== null) alloc[big] += P - used;
+  const delta = {};
+  classes.forEach(c => {
+    const before = src === '__ALL__' ? baseCents[c] : (c === src ? Ac : 0);
+    const d = (alloc[c] || 0) + (c === src ? Ac - P : 0) - before;
+    if (d !== 0) delta[c] = d;
+  });
+  return { status: 'ok', A: P / 100, Acents: P, alloc, delta, shares };
+}
+function portionCents(Ac, rule) {
+  const k = rule.portion || 'full';
+  if (k === 'full') return Ac;
+  if (rule.portionValue === '' || rule.portionValue === null || rule.portionValue === undefined || !isFinite(Number(rule.portionValue))) return null;
+  const v = Number(rule.portionValue);
+  if (k === 'pct') return Math.round(Ac * v / 100);
+  if (k === 'amount') return (Ac < 0 ? -1 : 1) * Math.round(Math.abs(v) * 100);
+  return Ac;
+}
+
+function round2(n) { return Math.round(n * 100) / 100; }
+
+function buildJE(ctx, opts) {
+  const lines = [], issues = [], work = [];
+  for (const acc of ctx.accounts) {
+    const rule = ctx.rules[acc.fullName];
+    const res = computeAllocation(acc, rule, ctx);
+    if (res.status === 'none') continue;
+    if (res.status === 'error') { issues.push({ acc, error: res.error }); continue; }
+    if (res.status === 'zero') continue;
+    const qbName = (ctx.nameOverrides && ctx.nameOverrides[acc.fullName]) || acc.fullName;
+    const desc = [opts.memo, acc.name].filter(Boolean).join(' - ');
+    work.push({ acc, res, rule });
+    for (const c of ctx.classes) {
+      const d = res.delta[c];
+      if (!d) continue;
+      const isDebit = (acc.nature === 'debit') === (d > 0);
+      lines.push({ key: acc.fullName, account: qbName, cls: c,
+        debit: isDebit ? Math.abs(d) / 100 : 0, credit: isDebit ? 0 : Math.abs(d) / 100, desc });
+    }
+  }
+  const dr = lines.reduce((s, l) => s + Math.round(l.debit * 100), 0);
+  const cr = lines.reduce((s, l) => s + Math.round(l.credit * 100), 0);
+  return { lines, issues, work, debitCents: dr, creditCents: cr };
+}
+
+// ---------- App ----------
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+const S = {
+  pl: null, fileName: '', step: 1,
+  rules: LS.get('ca.rules.v1', {}), bases: LS.get('ca.bases.v1', []),
+  nameOverrides: LS.get('ca.names.v1', {}),
+  active: null, selected: new Set(), hideEmpty: true, defaultSource: null,
+  je: { no: '', date: '', memo: LS.get('ca.memo.v1', 'Class allocation'), fixedLoc: LS.get('ca.loc.v1', ''), fixedCls: LS.get('ca.cls.v1', '') }, dim: LS.get('ca.dim.v1', 'class')
+};
+const ALL = '__ALL__';
+function DIM() { return S.dim === 'location' ? { one: 'location', One: 'Location', many: 'locations', Many: 'Locations' } : { one: 'class', One: 'Class', many: 'classes', Many: 'Classes' }; }
+function rulesKey() { return S.dim === 'location' ? 'ca.rules.location.v1' : 'ca.rules.v1'; }
+function basesKey() { return S.dim === 'location' ? 'ca.bases.location.v1' : 'ca.bases.v1'; }
+function setDim(d) {
+  S.dim = d === 'location' ? 'location' : 'class'; LS.set('ca.dim.v1', S.dim);
+  S.rules = LS.get(rulesKey(), {}); S.bases = LS.get(basesKey(), []);
+  const t = document.getElementById('app-title'); if (t) t.textContent = DIM().One + ' allocation';
+  if (/^(class|location) allocation$/i.test(S.je.memo || '')) { S.je.memo = DIM().One + ' allocation'; LS.set('ca.memo.v1', S.je.memo); }
+}
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nf = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = n => { const r = Math.round(n * 100) / 100; if (r === 0) return '0.00'; return r < 0 ? `(${nf.format(-r)})` : nf.format(r); };
+const pctFmt = n => (Math.round(n * 10000) / 100).toFixed(2) + '%';
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+function saveRules() { LS.set(rulesKey(), S.rules); }
+function saveBases() { LS.set(basesKey(), S.bases); }
+function saveNames() { LS.set('ca.names.v1', S.nameOverrides); }
+
+function ctx() {
+  const p = S.pl;
+  return { classes: p.classes, accounts: p.accounts, sectionTotals: sectionTotals(p.accounts, p.classes),
+    bases: S.bases, rules: S.rules, nameOverrides: S.nameOverrides };
+}
+function ruleSource(acc) { const r = S.rules[acc.fullName]; return (r && r.method !== 'none' && r.source) || S.defaultSource; }
+function amountFor(acc) { const s = ruleSource(acc); return s === ALL ? acc.total : (acc.values[s] || 0); }
+function sourceLabel(s) { return s === ALL ? `all ${DIM().many} (re-spread total)` : s; }
+
+function driverOptions() {
+  const st = sectionTotals(S.pl.accounts, S.pl.classes);
+  return {
+    sections: Object.keys(st).map(n => ({ key: 'section:' + n, label: 'Total ' + n })),
+    accounts: S.pl.accounts.map(a => ({ key: 'acct:' + a.fullName, label: a.fullName }))
+  };
+}
+function driverLabel(key) {
+  if (!key) return '—';
+  if (key.startsWith('section:')) return 'Total ' + key.slice(8);
+  if (key.startsWith('acct:')) return key.slice(5);
+  return key;
+}
+function ruleSummary(rule) {
+  if (!rule || rule.method === 'none') return '';
+  let m = '';
+  if (rule.method === 'basis') { const b = S.bases.find(x => x.id === rule.basisId); m = b ? `${b.name || 'Untitled'} basis` : 'Basis not set'; }
+  if (rule.method === 'percent') m = 'Custom %';
+  if (rule.method === 'amount') m = 'Exact amounts';
+  if (rule.method === 'driver') m = 'By ' + driverLabel(rule.driver);
+  if (rule.method === 'single') m = 'All to ' + (rule.single || '—');
+  if (rule.method !== 'amount' && rule.source !== ALL && rule.portion && rule.portion !== 'full' && rule.portionValue !== '' && rule.portionValue != null) m += rule.portion === 'pct' ? ` · ${rule.portionValue}% of balance` : ` · ${fmt(Math.abs(rule.portionValue))} only`;
+  return m;
+}
+
+function newRule(method, acc) {
+  const classes = S.pl.classes;
+  const source = S.defaultSource;
+  const others = classes.filter(c => c !== source);
+  const secs = Object.keys(sectionTotals(S.pl.accounts, classes));
+  return {
+    method, source, pcts: {}, amts: {}, basisId: S.bases[0] ? S.bases[0].id : null,
+    driver: secs.includes('Income') ? 'section:Income' : (secs[0] ? 'section:' + secs[0] : null),
+    targets: others.slice(), single: others[0] || classes[0]
+  };
+}
+
+// ---------- Step navigation ----------
+function setStep(n) {
+  if (n > 1 && !S.pl) return;
+  S.step = n;
+  document.querySelectorAll('.step-btn').forEach(b => b.setAttribute('aria-current', Number(b.dataset.step) === n ? 'step' : 'false'));
+  document.querySelectorAll('.panel').forEach(p => p.hidden = Number(p.dataset.step) !== n);
+  if (n === 1) renderUpload();
+  if (n === 2) renderRules();
+  if (n === 3) renderJE();
+  if (n === 4) renderAfterPL();
+  window.scrollTo({ top: 0 });
+}
+function refreshNav() {
+  document.querySelectorAll('.step-btn').forEach(b => { if (b.dataset.step !== '1') b.disabled = !S.pl; });
+}
+
+// ---------- Step 1: upload ----------
+function loadParsed(parsed, fileName) {
+  S.pl = parsed; S.fileName = fileName;
+  if (parsed.dimension && parsed.dimension !== S.dim) setDim(parsed.dimension);
+  const c = parsed.classes;
+  S.defaultSource = c.find(x => /not specified|unclassified|no class|no location|no department/i.test(x)) || c[c.length - 1];
+  const today = new Date();
+  const fallback = new Date(today.getFullYear(), today.getMonth(), 0);
+  S.je.date = parsed.defaultDate || `${fallback.getFullYear()}-${String(fallback.getMonth() + 1).padStart(2, '0')}-${String(fallback.getDate()).padStart(2, '0')}`;
+  S.je.no = 'ALLOC-' + S.je.date.slice(0, 7);
+  S.selected = new Set();
+  S.active = (parsed.accounts.find(a => S.rules[a.fullName]) || parsed.accounts.find(a => amountFor(a)) || parsed.accounts[0]).fullName;
+  refreshNav();
+  renderUpload();
+}
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const wb = XLSX.read(new Uint8Array(reader.result), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+      loadParsed(parsePL(aoa), file.name);
+    } catch (e) { showUploadError(e.message || String(e)); }
+  };
+  reader.onerror = () => showUploadError('The file could not be read.');
+  reader.readAsArrayBuffer(file);
+}
+function showUploadError(msg) {
+  const el = $('#upload-error'); el.textContent = msg; el.hidden = false;
+}
+function sampleData() {
+  const aoa = [
+    ['Harbor Lane Properties LLC'], ['Profit and Loss by Class'], ['January - October, 2026'], [],
+    ['', 'Bayview', 'Cedar Court', 'Millbrook', 'Not Specified', 'Total'],
+    ['Income'],
+    ['4000 Rental Income', 182400, 126000, 94800, '', 403200],
+    ['4100 Late Fees', 2150, 1380, 960, 410, 4900],
+    ['Total Income', 184550, 127380, 95760, 410, 408100],
+    ['Gross Profit', 184550, 127380, 95760, 410, 408100],
+    ['Expenses'],
+    ['6000 Bank Charges', '', '', '', 845.5, 845.5],
+    ['6100 Insurance', '', '', '', 28650, 28650],
+    ['6200 Management Fees', '', '', '', 24192, 24192],
+    ['6300 Professional Fees'],
+    ['6310 Accounting', '', '', '', 9800, 9800],
+    ['6320 Legal', 1250, '', '', 3400, 4650],
+    ['Total 6300 Professional Fees', 1250, '', '', 13200, 14450],
+    ['6400 Repairs & Maintenance', 14320.4, 9875.15, 7210, 1890, 33295.55],
+    ['6500 Utilities', 8840, 6120, 4975, 2750.75, 22685.75],
+    ['Total Expenses', 24410.4, 15995.15, 12185, 71528.25, 124118.8],
+    ['Net Operating Income', 160139.6, 111384.85, 83575, -71118.25, 283981.2],
+    ['Net Income', 160139.6, 111384.85, 83575, -71118.25, 283981.2]
+  ];
+  loadParsed(parsePL(aoa), 'Sample P&L by class');
+}
+function renderUpload() {
+  const el = $('#panel-1');
+  if (!S.pl) {
+    el.innerHTML = `
+      <div class="drop" id="drop">
+        <input type="file" id="file" accept=".xlsx,.xls,.csv" class="sr-only">
+        <label for="file" class="drop-inner">
+          <span class="drop-title">Upload your Profit and Loss by Class or by Location</span>
+          <span class="drop-sub">Excel or CSV exported from QuickBooks. Drop it here or choose a file.</span>
+          <span class="btn primary" aria-hidden="true">Choose file</span>
+        </label>
+      </div>
+      <p class="error" id="upload-error" hidden></p>
+      <p class="muted small">In QuickBooks Online: Reports → Profit and Loss by Class (or by Location) → set the period → Export to Excel. Keep the layout as exported.
+      No file handy? <button class="linklike" data-act="sample">Load a sample P&amp;L</button></p>`;
+    const drop = $('#drop');
+    $('#file').addEventListener('change', e => handleFile(e.target.files[0]));
+    ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+    drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+    return;
+  }
+  const p = S.pl;
+  const bySection = [];
+  let last = null;
+  p.accounts.forEach(a => { if (a.section !== last) { bySection.push({ section: a.section }); last = a.section; } bySection.push(a); });
+  el.innerHTML = `
+    <div class="filebar">
+      <div>
+        <div class="filename">${esc(S.fileName)}</div>
+        <div class="muted small">${p.period ? esc(p.period) + ' · ' : ''}${p.accounts.length} accounts · ${p.classes.length} ${DIM().many}</div>
+      </div>
+      <div class="row-gap">
+        <div class="methods view-toggle" role="group" aria-label="Columns in this P&amp;L are">
+          <span class="muted small">Columns are</span>
+          ${[['class', 'Classes'], ['location', 'Locations']].map(([k, l]) => `<button class="seg ${k === S.dim ? 'on' : ''}" aria-pressed="${k === S.dim}" data-act="set-dim" data-dim="${k}">${l}</button>`).join('')}
+        </div>
+        <label class="btn" for="file2">Replace file</label><input type="file" id="file2" accept=".xlsx,.xls,.csv" class="sr-only">
+        <button class="btn primary" data-act="goto" data-step="2">Set allocation rules</button>
+      </div>
+    </div>
+    <p class="error" id="upload-error" hidden></p>
+    <p class="muted small">Check that each account landed in the right section. Income accounts are treated as credit balances; cost of goods sold and expenses as debit balances.</p>
+    <div class="scroll"><table class="grid">
+      <thead><tr><th class="l">Account</th>${p.classes.map(c => `<th>${esc(c)}</th>`).join('')}<th>Total</th></tr></thead>
+      <tbody>${bySection.map(r => r.section && !r.id
+        ? `<tr class="sec"><td colspan="${p.classes.length + 2}">${esc(r.section)}</td></tr>`
+        : `<tr><td class="l" style="padding-left:${0.75 + r.depth * 1}rem">${esc(r.name)}</td>${p.classes.map(c => `<td class="num">${fmt(r.values[c])}</td>`).join('')}<td class="num strong">${fmt(r.total)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  $('#file2').addEventListener('change', e => handleFile(e.target.files[0]));
+}
+
+// ---------- Step 2: rules ----------
+function renderRules() {
+  const el = $('#panel-2');
+  const p = S.pl;
+  el.innerHTML = `
+    <div class="toolbar">
+      <label class="field inline">Default “allocate from” ${DIM().one}
+        <select id="def-src">${p.classes.map(c => `<option ${c === S.defaultSource ? 'selected' : ''}>${esc(c)}</option>`).join('')}<option value="${ALL}" ${S.defaultSource === ALL ? 'selected' : ''}>All ${DIM().many} (re-spread total)</option></select>
+      </label>
+      <label class="check"><input type="checkbox" id="hide-empty" ${S.hideEmpty ? 'checked' : ''}> Hide accounts with nothing to allocate</label>
+      <div class="row-gap push">
+        <button class="btn" data-act="export-rules">Export rules</button>
+        <label class="btn" for="import-rules">Import rules</label><input type="file" id="import-rules" accept=".json" class="sr-only">
+      </div>
+    </div>
+    <details class="bases" id="bases" ${S.bases.length ? '' : 'open'}>
+      <summary><span>Allocation bases</span><span class="muted small">Reusable percentage splits, like headcount or square footage. Set once, apply to many accounts.</span></summary>
+      <div id="bases-body"></div>
+    </details>
+    <div class="split">
+      <section class="list-col" aria-label="Accounts">
+        <div class="bulkbar" id="bulkbar"></div>
+        <div class="scroll"><table class="grid accts" id="acct-table"></table></div>
+      </section>
+      <section class="editor" id="editor" aria-label="Rule for selected account"></section>
+    </div>
+    <div class="footer-nav">
+      <button class="btn" data-act="goto" data-step="1">Back</button>
+      <button class="btn primary" data-act="goto" data-step="3">Review journal entry</button>
+    </div>`;
+  $('#def-src').addEventListener('change', e => { S.defaultSource = e.target.value; renderAccountList(); renderEditor(); });
+  $('#hide-empty').addEventListener('change', e => { S.hideEmpty = e.target.checked; renderAccountList(); });
+  $('#import-rules').addEventListener('change', e => importRules(e.target.files[0]));
+  renderBases(); renderAccountList(); renderEditor();
+}
+
+function renderBases() {
+  const body = $('#bases-body'); if (!body) return;
+  const classes = S.pl.classes;
+  body.innerHTML = `${S.bases.length ? `<div class="scroll"><table class="grid bases-table">
+      <thead><tr><th class="l">Basis name</th>${classes.map(c => `<th>${esc(c)}</th>`).join('')}<th>Total</th><th><span class="sr-only">Remove</span></th></tr></thead>
+      <tbody>${S.bases.map(b => {
+        const t = classes.reduce((s, c) => s + (Number(b.pcts[c]) || 0), 0);
+        return `<tr data-basis="${b.id}">
+          <td class="l"><input class="txt" data-bname value="${esc(b.name)}" placeholder="e.g. Units" aria-label="Basis name"></td>
+          ${classes.map(c => `<td><input class="pct" type="number" step="0.01" inputmode="decimal" data-bpct="${esc(c)}" value="${b.pcts[c] ?? ''}" aria-label="${esc(b.name || 'Basis')} percent for ${esc(c)}"></td>`).join('')}
+          <td class="num ${Math.abs(t - 100) > 0.005 ? 'bad' : 'good'}" data-btotal>${(Math.round(t * 100) / 100).toFixed(2)}%</td>
+          <td><button class="icon" data-act="del-basis" aria-label="Remove basis">✕</button></td></tr>`;
+      }).join('')}</tbody></table></div>` : '<p class="muted small">No bases yet.</p>'}
+    <button class="btn" data-act="add-basis">Add basis</button>`;
+}
+
+function statusOf(acc) {
+  const rule = S.rules[acc.fullName];
+  if (!rule || rule.method === 'none') return { cls: '', text: '' };
+  const r = computeAllocation(acc, rule, ctx());
+  if (r.status === 'error') return { cls: 'bad', text: r.error };
+  if (r.status === 'zero') return { cls: 'idle', text: 'Nothing to allocate' };
+  return { cls: 'good', text: 'Ready' };
+}
+
+function renderAccountList() {
+  const tbl = $('#acct-table'); if (!tbl) return;
+  const p = S.pl;
+  const shown = p.accounts.filter(a => !S.hideEmpty || Math.round(amountFor(a) * 100) !== 0 || S.rules[a.fullName]?.method && S.rules[a.fullName].method !== 'none' || a.fullName === S.active);
+  let last = null, rows = '';
+  for (const a of shown) {
+    if (a.section !== last) { rows += `<tr class="sec"><td colspan="4">${esc(a.section)}</td></tr>`; last = a.section; }
+    const st = statusOf(a);
+    const rule = S.rules[a.fullName];
+    rows += `<tr class="acct ${a.fullName === S.active ? 'active' : ''}" data-acct="${esc(a.fullName)}">
+      <td class="cb"><input type="checkbox" data-sel="${esc(a.fullName)}" ${S.selected.has(a.fullName) ? 'checked' : ''} aria-label="Select ${esc(a.fullName)}"></td>
+      <td class="l"><button class="acct-btn" data-pick="${esc(a.fullName)}">${esc(a.fullName)}</button></td>
+      <td class="num">${fmt(amountFor(a))}</td>
+      <td class="rule-cell">${rule && rule.method !== 'none' ? `<span class="dot ${st.cls}" title="${esc(st.text)}"></span>${esc(ruleSummary(rule))}` : '<span class="muted">Not allocated</span>'}</td></tr>`;
+  }
+  if (!shown.length) rows = `<tr><td colspan="4" class="muted pad">No account has a balance in the source ${DIM().one}. Uncheck “Hide accounts with nothing to allocate” to see them all.</td></tr>`;
+  const allSel = shown.length && shown.every(a => S.selected.has(a.fullName));
+  tbl.innerHTML = `<thead><tr><th class="cb"><input type="checkbox" id="sel-all" ${allSel ? 'checked' : ''} aria-label="Select all shown accounts"></th><th class="l">Account</th><th>To allocate</th><th class="l">Rule</th></tr></thead><tbody>${rows}</tbody>`;
+  $('#sel-all').addEventListener('change', e => { shown.forEach(a => e.target.checked ? S.selected.add(a.fullName) : S.selected.delete(a.fullName)); renderAccountList(); });
+  renderBulkbar();
+}
+
+function renderBulkbar() {
+  const bar = $('#bulkbar'); if (!bar) return;
+  const n = S.selected.size;
+  const activeRule = S.rules[S.active];
+  if (!n) { bar.innerHTML = `<span class="muted small">Pick an account to set its rule. Tick several to copy one rule across them.</span>`; return; }
+  bar.innerHTML = `<span><strong>${n}</strong> selected</span>
+    <button class="btn small" data-act="copy-rule" ${activeRule && activeRule.method !== 'none' ? '' : 'disabled'}>Copy rule from ${esc(S.active ? S.active.split(':').pop() : '')}</button>
+    <button class="btn small" data-act="clear-selected">Clear their rules</button>
+    <button class="linklike small" data-act="sel-none">Deselect</button>`;
+}
+
+function renderEditor() {
+  const ed = $('#editor'); if (!ed) return;
+  const p = S.pl;
+  const acc = p.accounts.find(a => a.fullName === S.active);
+  if (!acc) { ed.innerHTML = '<p class="muted pad">Pick an account on the left.</p>'; return; }
+  const rule = S.rules[acc.fullName] || { method: 'none' };
+  const m = rule.method;
+  const src = rule.source || S.defaultSource;
+  const opts = driverOptions();
+  const methods = [
+    ['none', 'Don’t allocate'], ['basis', 'Allocation basis'], ['percent', 'Custom percentages'],
+    ['amount', 'Exact amounts'], ['driver', 'In proportion to'], ['single', `Move to one ${DIM().one}`]
+  ];
+  let fields = '';
+  if (m === 'basis') {
+    fields = S.bases.length
+      ? `<label class="field">Basis<select data-r="basisId">${S.bases.map(b => `<option value="${b.id}" ${b.id === rule.basisId ? 'selected' : ''}>${esc(b.name || 'Untitled')}</option>`).join('')}</select></label>
+         <p class="muted small">${p.classes.filter(c => Number((S.bases.find(b => b.id === rule.basisId) || {}).pcts?.[c])).map(c => `${esc(c)} ${(S.bases.find(b => b.id === rule.basisId)).pcts[c]}%`).join(' · ')}</p>`
+      : `<p class="note">You haven’t made any bases yet. <button class="linklike" data-act="open-bases">Add one above</button>, or use custom percentages.</p>`;
+  } else if (m === 'percent') {
+    const t = p.classes.reduce((s, c) => s + (Number(rule.pcts?.[c]) || 0), 0);
+    fields = `<div class="pct-grid">${p.classes.map(c => `<label class="pct-row"><span>${esc(c)}${c === src ? ' <em class="muted">(source)</em>' : ''}</span><span class="pct-wrap"><input class="pct" type="number" step="0.01" inputmode="decimal" data-rpct="${esc(c)}" value="${rule.pcts?.[c] ?? ''}"><span>%</span></span></label>`).join('')}
+      <div class="pct-row total"><span>Total</span><span id="pct-total" class="${Math.abs(t - 100) > 0.005 ? 'bad' : 'good'}">${(Math.round(t * 100) / 100).toFixed(2)}%</span></div></div>
+      <button class="linklike small" data-act="even">Split evenly across the other ${DIM().many}</button>`;
+  } else if (m === 'driver') {
+    const dv = driverValues(rule.driver, ctx()) || {};
+    const tg = (rule.targets || []).filter(c => p.classes.includes(c));
+    const s = tg.reduce((t, c) => t + (dv[c] || 0), 0);
+    fields = `<label class="field">Allocate in proportion to<select data-r="driver">
+        <optgroup label="Section totals">${opts.sections.map(o => `<option value="${esc(o.key)}" ${o.key === rule.driver ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</optgroup>
+        <optgroup label="Accounts">${opts.accounts.map(o => `<option value="${esc(o.key)}" ${o.key === rule.driver ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</optgroup>
+      </select></label>
+      <fieldset class="targets"><legend>${DIM().Many} that share it</legend>
+      ${p.classes.map(c => `<label class="check"><input type="checkbox" data-target="${esc(c)}" ${tg.includes(c) ? 'checked' : ''}> ${esc(c)} <span class="muted small num-inline">${fmt(dv[c] || 0)}${tg.includes(c) && Math.abs(s) > 0.005 ? ' · ' + pctFmt((dv[c] || 0) / s) : ''}</span></label>`).join('')}
+      </fieldset>`;
+  } else if (m === 'amount') {
+    const all = src === ALL;
+    const avail = all ? acc.total : (acc.values[src] || 0);
+    const used = p.classes.reduce((s, c) => s + (c === src ? 0 : (Number(rule.amts?.[c]) || 0)), 0);
+    fields = `<p class="muted small">${all ? 'Enter the amount each ' + DIM().one + ' should end up with. They must add up to the account total.' : 'Enter the exact amount to move to each ' + DIM().one + '. Whatever you don’t assign stays in ' + esc(src) + '.'}</p>
+      <div class="pct-grid">${p.classes.map(c => c === src
+        ? `<div class="pct-row"><span>${esc(c)} <em class="muted">(source, keeps the rest)</em></span><span id="amt-rest" class="num">${fmt(avail - used)}</span></div>`
+        : `<label class="pct-row"><span>${esc(c)}</span><span class="pct-wrap"><input class="pct amt" type="number" step="0.01" inputmode="decimal" data-ramt="${esc(c)}" value="${rule.amts?.[c] ?? ''}"></span></label>`).join('')}
+      <div class="pct-row total"><span>${all ? 'Total entered' : 'Total moved'}</span><span id="amt-total">${fmt(used)}</span></div>
+      <div class="pct-row"><span class="muted">${all ? 'Account total' : 'Available in ' + esc(src)}</span><span class="muted">${fmt(avail)}</span></div></div>`;
+  } else if (m === 'single') {
+    fields = `<label class="field">Move the balance to<select data-r="single">${p.classes.map(c => `<option ${c === rule.single ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>`;
+  }
+  ed.innerHTML = `
+    <div class="ed-head">
+      <div class="muted small">${esc(acc.section)} · ${acc.nature === 'credit' ? 'credit balance' : 'debit balance'}</div>
+      <h3>${esc(acc.fullName)}</h3>
+    </div>
+    <fieldset class="methods"><legend class="sr-only">Allocation method</legend>
+      ${methods.map(([k, l]) => `<label class="seg ${k === m ? 'on' : ''}"><input type="radio" name="method" value="${k}" ${k === m ? 'checked' : ''}>${l}</label>`).join('')}
+    </fieldset>
+    ${m !== 'none' ? `<label class="field">Allocate from<select data-r="source">${p.classes.map(c => `<option ${c === src ? 'selected' : ''}>${esc(c)}</option>`).join('')}<option value="${ALL}" ${src === ALL ? 'selected' : ''}>All ${DIM().many} (re-spread the total)</option></select></label>` : ''}
+    ${portionHTML(acc, rule, m, src)}
+    ${fields}
+    <div id="preview"></div>`;
+  ed.querySelectorAll('input[name=method]').forEach(r => r.addEventListener('change', e => setMethod(acc, e.target.value)));
+  ed.querySelectorAll('select[data-r]').forEach(s => s.addEventListener('change', e => {
+    const r = S.rules[acc.fullName]; r[e.target.dataset.r] = e.target.value;
+    if (e.target.dataset.r === 'source' && r.method === 'driver' && e.target.value !== ALL) r.targets = (r.targets || []).filter(c => c !== e.target.value);
+    saveRules(); renderEditor(); renderAccountList();
+  }));
+  ed.querySelectorAll('input[data-target]').forEach(cb => cb.addEventListener('change', e => {
+    const r = S.rules[acc.fullName]; const c = e.target.dataset.target;
+    r.targets = (r.targets || []).filter(x => x !== c); if (e.target.checked) r.targets.push(c);
+    saveRules(); renderEditor(); renderAccountList();
+  }));
+  const pv = ed.querySelector('#portion-val');
+  if (pv) pv.addEventListener('input', e => {
+    const r = S.rules[acc.fullName]; r.portionValue = e.target.value === '' ? '' : Number(e.target.value); saveRules();
+    const n = $('#portion-note'); if (n) n.innerHTML = portionNote(acc, r, r.source || S.defaultSource);
+    renderPreview(acc); renderAccountList();
+  });
+  ed.querySelectorAll('input[data-ramt]').forEach(inp => inp.addEventListener('input', e => {
+    const r = S.rules[acc.fullName]; r.amts = r.amts || {};
+    const v = e.target.value; if (v === '') delete r.amts[e.target.dataset.ramt]; else r.amts[e.target.dataset.ramt] = Number(v);
+    saveRules();
+    const srcNow = r.source || S.defaultSource;
+    const used = p.classes.reduce((s, c) => s + (c === srcNow ? 0 : (Number(r.amts[c]) || 0)), 0);
+    const avail = srcNow === ALL ? acc.total : (acc.values[srcNow] || 0);
+    const t = $('#amt-total'); if (t) t.textContent = fmt(used);
+    const rest = $('#amt-rest'); if (rest) rest.textContent = fmt(avail - used);
+    renderPreview(acc); renderAccountList();
+  }));
+  ed.querySelectorAll('input[data-rpct]').forEach(inp => inp.addEventListener('input', e => {
+    const r = S.rules[acc.fullName]; r.pcts = r.pcts || {};
+    const v = e.target.value; if (v === '') delete r.pcts[e.target.dataset.rpct]; else r.pcts[e.target.dataset.rpct] = Number(v);
+    saveRules();
+    const t = p.classes.reduce((s, c) => s + (Number(r.pcts[c]) || 0), 0);
+    const tt = $('#pct-total'); tt.textContent = (Math.round(t * 100) / 100).toFixed(2) + '%'; tt.className = Math.abs(t - 100) > 0.005 ? 'bad' : 'good';
+    renderPreview(acc); renderAccountList();
+  }));
+  renderPreview(acc);
+}
+
+function portionHTML(acc, rule, m, src) {
+  if (m === 'none' || m === 'amount') return '';
+  if (src === ALL) return '<p class="muted small">Re-spreading the total always uses the full balance.</p>';
+  const k = rule.portion || 'full';
+  return `<div class="portion">
+    <label class="field">How much to allocate<select data-r="portion">
+      <option value="full" ${k === 'full' ? 'selected' : ''}>Full balance</option>
+      <option value="pct" ${k === 'pct' ? 'selected' : ''}>Percentage of the balance</option>
+      <option value="amount" ${k === 'amount' ? 'selected' : ''}>Fixed amount</option>
+    </select></label>
+    ${k !== 'full' ? `<label class="field">${k === 'pct' ? 'Percentage of the balance' : 'Amount to allocate'}<span class="pct-wrap"><input class="pct" type="number" step="0.01" inputmode="decimal" id="portion-val" value="${rule.portionValue ?? ''}">${k === 'pct' ? '<span>%</span>' : ''}</span></label>` : ''}
+    <p class="muted small" id="portion-note">${portionNote(acc, rule, src)}</p></div>`;
+}
+function portionNote(acc, rule, src) {
+  if (src === ALL) return '';
+  const avail = acc.values[src] || 0;
+  const P = portionCents(Math.round(avail * 100), rule);
+  if (P === null) return '';
+  if (Math.abs(P) > Math.abs(Math.round(avail * 100))) return '';
+  return `Allocating ${fmt(P / 100)} of the ${fmt(avail)} in ${esc(src)}. ${fmt(avail - P / 100)} stays there.`;
+}
+function setMethod(acc, method) {
+  const existing = S.rules[acc.fullName];
+  if (method === 'none') { if (existing) existing.method = 'none'; }
+  else if (!existing) S.rules[acc.fullName] = newRule(method, acc);
+  else {
+    existing.method = method;
+    const defs = newRule(method, acc);
+    for (const k of Object.keys(defs)) if (existing[k] === undefined || existing[k] === null) existing[k] = defs[k];
+  }
+  saveRules(); renderEditor(); renderAccountList();
+}
+
+function renderPreview(acc) {
+  const el = $('#preview'); if (!el) return;
+  const rule = S.rules[acc.fullName];
+  if (!rule || rule.method === 'none') { el.innerHTML = ''; return; }
+  const r = computeAllocation(acc, rule, ctx());
+  if (r.status === 'error') { el.innerHTML = `<p class="error">${esc(r.error)}</p>`; return; }
+  if (r.status === 'zero') { el.innerHTML = `<p class="note">There’s nothing in ${esc(sourceLabel(rule.source))} for this account, so no entry is made. The rule stays saved for future periods.</p>`; return; }
+  const c = S.pl.classes;
+  el.innerHTML = `<h4>Effect on this account</h4><div class="scroll"><table class="grid preview">
+    <thead><tr><th class="l">${DIM().One}</th><th>Before</th><th>Entry</th><th>After</th></tr></thead>
+    <tbody>${c.map(k => { const d = (r.delta[k] || 0) / 100; const after = (acc.values[k] || 0) + d;
+      const side = d === 0 ? '' : ((acc.nature === 'debit') === (d > 0) ? 'Dr' : 'Cr');
+      return `<tr><td class="l">${esc(k)}</td><td class="num">${fmt(acc.values[k] || 0)}</td><td class="num ${side === 'Dr' ? 'dr' : side === 'Cr' ? 'cr' : 'muted'}">${d ? side + ' ' + fmt(Math.abs(d)) : '–'}</td><td class="num">${fmt(after)}</td></tr>`; }).join('')}
+    <tr class="tot"><td class="l">Total</td><td class="num">${fmt(acc.total)}</td><td></td><td class="num">${fmt(acc.total)}</td></tr></tbody></table></div>`;
+}
+
+function copyRuleToSelected() {
+  const src = S.rules[S.active]; if (!src) return;
+  let n = 0;
+  S.selected.forEach(k => { if (k !== S.active) { S.rules[k] = JSON.parse(JSON.stringify(src)); n++; } });
+  saveRules(); renderAccountList(); toast(`Rule copied to ${n} account${n === 1 ? '' : 's'}.`);
+}
+
+function exportRules() {
+  const data = JSON.stringify({ version: 1, rules: S.rules, bases: S.bases, nameOverrides: S.nameOverrides }, null, 2);
+  offerFile('class-allocation-rules.json', data);
+}
+function importRules(file) {
+  if (!file) return;
+  file.text().then(t => {
+    const d = JSON.parse(t);
+    if (!d || typeof d.rules !== 'object') throw new Error('bad');
+    Object.assign(S.rules, d.rules);
+    (d.bases || []).forEach(b => { const i = S.bases.findIndex(x => x.id === b.id); if (i >= 0) S.bases[i] = b; else S.bases.push(b); });
+    Object.assign(S.nameOverrides, d.nameOverrides || {});
+    saveRules(); saveBases(); saveNames(); renderRules(); toast('Rules imported.');
+  }).catch(() => toast('That file isn’t a rules export from this app.', true));
+}
+
+// ---------- Step 3: journal entry ----------
+function renderJE() {
+  const el = $('#panel-3');
+  el.innerHTML = `
+    <div class="je-head">
+      <label class="field">Journal no.<input class="txt" id="je-no" value="${esc(S.je.no)}"></label>
+      <label class="field">Date<input class="txt" type="date" id="je-date" value="${esc(S.je.date)}"></label>
+      <label class="field grow">Journal description<input class="txt" id="je-memo" value="${esc(S.je.memo)}"></label>
+      ${S.dim === 'class'
+        ? `<label class="field">Location <span class="small">(optional, same on every line)</span><input class="txt" id="je-fixed" value="${esc(S.je.fixedLoc)}" placeholder="Leave blank if not used"></label>`
+        : `<label class="field">Class <span class="small">(optional, same on every line)</span><input class="txt" id="je-fixed" value="${esc(S.je.fixedCls)}" placeholder="Leave blank if not used"></label>`}
+    </div>
+    <div id="je-body"></div>
+    <div class="footer-nav">
+      <button class="btn" data-act="goto" data-step="2">Back to rules</button>
+      <button class="btn primary" data-act="goto" data-step="4">Preview updated P&amp;L</button>
+    </div>`;
+  $('#je-no').addEventListener('input', e => { S.je.no = e.target.value; });
+  $('#je-date').addEventListener('change', e => { S.je.date = e.target.value; });
+  $('#je-fixed').addEventListener('input', e => {
+    if (S.dim === 'class') { S.je.fixedLoc = e.target.value; LS.set('ca.loc.v1', S.je.fixedLoc); }
+    else { S.je.fixedCls = e.target.value; LS.set('ca.cls.v1', S.je.fixedCls); }
+  });
+  $('#je-memo').addEventListener('input', e => { S.je.memo = e.target.value; LS.set('ca.memo.v1', S.je.memo); renderJEBody(); });
+  renderJEBody();
+}
+function currentJE() { return buildJE(ctx(), { memo: S.je.memo }); }
+function renderJEBody() {
+  const el = $('#je-body'); if (!el) return;
+  const je = currentJE();
+  const balanced = je.debitCents === je.creditCents;
+  const issues = je.issues.length ? `<div class="issues"><strong>${je.issues.length} account${je.issues.length === 1 ? ' was' : 's were'} left out because the rule needs fixing:</strong><ul>${je.issues.map(i => `<li><button class="linklike" data-act="fix" data-acct="${esc(i.acc.fullName)}">${esc(i.acc.fullName)}</button> — ${esc(i.error)}</li>`).join('')}</ul></div>` : '';
+  if (!je.lines.length) {
+    el.innerHTML = issues + `<div class="empty"><p>No entry lines yet.</p><p class="muted small">Set a rule on at least one account with a balance in its source class.</p><button class="btn primary" data-act="goto" data-step="2">Set allocation rules</button></div>`;
+    return;
+  }
+  const accts = [...new Map(je.lines.map(l => [l.key, l])).keys()];
+  let prev = null;
+  el.innerHTML = `${issues}
+    <div class="ledger">
+      <div class="ledger-top">
+        <div><span class="muted small">Journal entry</span><div class="je-title">${esc(S.je.no || '—')}</div></div>
+        <div class="balance ${balanced ? 'good' : 'bad'}">${balanced ? 'Balanced' : 'Out of balance by ' + fmt(Math.abs(je.debitCents - je.creditCents) / 100)}</div>
+      </div>
+      <div class="scroll"><table class="grid je">
+        <thead><tr><th class="l">Account</th><th class="l">${DIM().One}</th><th>Debit</th><th>Credit</th><th class="l">Description</th></tr></thead>
+        <tbody>${je.lines.map(l => { const first = l.key !== prev; prev = l.key;
+          return `<tr class="${first ? 'grp' : ''}"><td class="l">${first ? esc(l.account) : ''}</td><td class="l">${esc(l.cls)}</td><td class="num dr">${l.debit ? fmt(l.debit) : ''}</td><td class="num cr">${l.credit ? fmt(l.credit) : ''}</td><td class="l muted">${esc(l.desc)}</td></tr>`; }).join('')}
+        <tr class="tot"><td class="l" colspan="2">Total · ${je.lines.length} lines</td><td class="num dr">${fmt(je.debitCents / 100)}</td><td class="num cr">${fmt(je.creditCents / 100)}</td><td></td></tr>
+        </tbody></table></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" data-act="dl-csv-gaccon" ${balanced ? '' : 'disabled'}>Download CSV for G-Accon</button>
+      <button class="btn primary" data-act="dl-csv-qb" ${balanced ? '' : 'disabled'}>Download CSV for QuickBooks import</button>
+      <button class="btn" data-act="dl-xlsx" ${balanced ? '' : 'disabled'}>Download Excel workpaper</button>
+    </div>
+    <details class="names">
+      <summary>Account names in QuickBooks</summary>
+      <p class="muted small">The import matches accounts by name, sub-accounts as Parent:Child. If a name below doesn’t match your chart of accounts exactly, change it here. Changes are remembered.</p>
+      <div class="names-grid">${accts.map(k => `<label class="field"><span class="muted small">${esc(k)}</span><input class="txt" data-name-for="${esc(k)}" value="${esc(S.nameOverrides[k] || k)}"></label>`).join('')}</div>
+    </details>
+    <p class="muted small">The G-Accon file has one Amount column with a Type of Debit or Credit. The QuickBooks file has separate Debit and Credit columns; in QuickBooks Online go to Settings → Import data → Journal entries, upload it, and map the columns. Dates are written as MM/DD/YYYY.</p>`;
+  el.querySelectorAll('input[data-name-for]').forEach(inp => inp.addEventListener('change', e => {
+    const k = e.target.dataset.nameFor; const v = e.target.value.trim();
+    if (!v || v === k) delete S.nameOverrides[k]; else S.nameOverrides[k] = v;
+    saveNames(); renderJEBody(); const d = $('#je-body details.names'); if (d) d.open = true;
+  }));
+}
+function usDate(iso) { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${m}/${d}/${y}`; }
+function csvCell(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function downloadCSV() {
+  const je = currentJE();
+  const head = ['Journal Number', 'Entry Date', 'Journal Description', 'Account', 'Location', 'Class', 'Amount', 'Type'];
+  const rows = je.lines.map(l => [S.je.no, usDate(S.je.date), l.desc, l.account, ...locCls(l), (l.debit || l.credit).toFixed(2), l.debit ? 'Debit' : 'Credit']);
+  const csv = [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+  offerFile(`${(S.je.no || 'allocation').replace(/[^\w.-]+/g, '_')}-G-Accon.csv`, csv);
+}
+function qbDim(v) { return /^(not specified|unclassified|no class|no location|no department)$/i.test(String(v).trim()) ? '' : v; }
+function locCls(l) { return S.dim === 'class' ? [S.je.fixedLoc || '', qbDim(l.cls)] : [qbDim(l.cls), S.je.fixedCls || '']; }
+function downloadCSVQB() {
+  const je = currentJE();
+  const head = ['Journal Number', 'Entry Date', 'Journal Description', 'Account', 'Location', 'Class', 'Debit', 'Credit'];
+  const rows = je.lines.map(l => [S.je.no, usDate(S.je.date), l.desc, l.account, ...locCls(l), l.debit ? l.debit.toFixed(2) : '', l.credit ? l.credit.toFixed(2) : '']);
+  const csv = [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+  offerFile(`${(S.je.no || 'allocation').replace(/[^\w.-]+/g, '_')}-QuickBooks.csv`, csv);
+}
+function downloadXLSX() {
+  const je = currentJE();
+  const c = S.pl.classes;
+  const wb = XLSX.utils.book_new();
+  const jeRows = [['Journal Number', 'Entry Date', 'Journal Description', 'Account', 'Location', 'Class', 'Amount', 'Type'],
+    ...je.lines.map(l => [S.je.no, usDate(S.je.date), l.desc, l.account, ...locCls(l), l.debit || l.credit, l.debit ? 'Debit' : 'Credit']),
+    [], ['', '', '', '', '', 'Total debits', je.debitCents / 100, 'Debit'], ['', '', '', '', '', 'Total credits', je.creditCents / 100, 'Credit']];
+  const ws1 = XLSX.utils.aoa_to_sheet(jeRows);
+  ws1['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 36 }, { wch: 36 }, { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 8 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Journal Entry');
+  const det = [['Account', 'Section', 'Rule', 'Allocated from', 'Amount allocated', ...c.map(k => 'Change: ' + k), ...c.map(k => 'After: ' + k)]];
+  je.work.forEach(w => det.push([w.acc.fullName, w.acc.section, ruleSummary(w.rule), sourceLabel(w.rule.source), w.res.A,
+    ...c.map(k => (w.res.delta[k] || 0) / 100), ...c.map(k => Math.round(((w.acc.values[k] || 0) * 100) + (w.res.delta[k] || 0)) / 100)]));
+  const ws2 = XLSX.utils.aoa_to_sheet(det);
+  ws2['!cols'] = [{ wch: 36 }, { wch: 14 }, { wch: 26 }, { wch: 22 }, { wch: 16 }, ...c.map(() => ({ wch: 16 })), ...c.map(() => ({ wch: 16 }))];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Allocation Detail');
+  if (S.bases.length) {
+    const ws3 = XLSX.utils.aoa_to_sheet([['Basis', ...c, 'Total'], ...S.bases.map(b => [b.name, ...c.map(k => Number(b.pcts[k]) || 0), c.reduce((s, k) => s + (Number(b.pcts[k]) || 0), 0)])]);
+    XLSX.utils.book_append_sheet(wb, ws3, 'Bases (%)');
+  }
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  offerFile(`${(S.je.no || 'allocation').replace(/[^\w.-]+/g, '_')}-workpaper.xlsx`, new Blob([buf]));
+}
+
+// ---------- Step 4: updated P&L ----------
+S.plView = 'after';
+function afterValues() {
+  const je = currentJE();
+  const delta = {};
+  je.work.forEach(w => { delta[w.acc.fullName] = w.res.delta; });
+  const c = S.pl.classes;
+  return { je, rows: S.pl.accounts.map(a => {
+    const d = delta[a.fullName] || {};
+    const after = {}, change = {}, before = {};
+    c.forEach(k => { before[k] = a.values[k] || 0; change[k] = (d[k] || 0) / 100; after[k] = Math.round(before[k] * 100 + (d[k] || 0)) / 100; });
+    return { acc: a, before, after, change, changed: c.some(k => d[k]) };
+  }) };
+}
+function plStructure(rows, view) {
+  const c = S.pl.classes;
+  const zero = () => Object.fromEntries(c.map(k => [k, 0]));
+  const out = [], order = [];
+  rows.forEach(r => { if (!order.includes(r.acc.section)) order.push(r.acc.section); });
+  const running = zero();
+  order.forEach(s => {
+    const inSec = rows.filter(r => r.acc.section === s);
+    out.push({ type: 'sec', label: s });
+    inSec.forEach(r => out.push({ type: 'acct', label: r.acc.name, depth: r.acc.depth, vals: r[view], before: r.before, change: r.change, changed: r.changed }));
+    const t = zero(); inSec.forEach(r => c.forEach(k => { t[k] += r[view][k] || 0; }));
+    out.push({ type: 'total', label: 'Total ' + s, vals: t });
+    const nature = inSec[0].acc.nature;
+    c.forEach(k => { running[k] += nature === 'credit' ? t[k] : -t[k]; });
+    if (/cost of goods|cost of sales|cogs/i.test(s)) out.push({ type: 'calc', label: 'Gross Profit', vals: { ...running } });
+  });
+  out.push({ type: 'net', label: view === 'change' ? 'Net Income change' : 'Net Income', vals: { ...running } });
+  return out;
+}
+function renderAfterPL() {
+  const el = $('#panel-4');
+  const { je, rows } = afterValues();
+  const c = S.pl.classes, view = S.plView;
+  const struct = plStructure(rows, view);
+  const isZero = v => Math.round(v * 100) === 0;
+  const cell = v => view === 'change' && isZero(v) ? '<span class="muted">–</span>' : fmt(v);
+  const sum = v => c.reduce((s, k) => s + (v[k] || 0), 0);
+  const changedCount = rows.filter(r => r.changed).length;
+  const titles = { after: 'After posting ' + (S.je.no || 'the entry'), before: 'As uploaded', change: 'Changes from the entry' };
+  const body = struct.map(r => {
+    if (r.type === 'sec') return `<tr class="sec"><td colspan="${c.length + 2}">${esc(r.label)}</td></tr>`;
+    if (r.type === 'acct') return `<tr class="${r.changed ? 'chg' : ''}"><td class="l" style="padding-left:${0.75 + r.depth}rem">${esc(r.label)}</td>${c.map(k => {
+        const hit = r.changed && !isZero(r.change[k]);
+        const tip = hit ? ` title="Before ${fmt(r.before[k])} · Change ${fmt(r.change[k])}"` : '';
+        return `<td class="num ${hit ? 'hit' : ''}"${tip}>${cell(r.vals[k])}</td>`; }).join('')}<td class="num strong">${cell(sum(r.vals))}</td></tr>`;
+    return `<tr class="${r.type}"><td class="l">${esc(r.label)}</td>${c.map(k => `<td class="num">${cell(r.vals[k])}</td>`).join('')}<td class="num">${cell(sum(r.vals))}</td></tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="filebar">
+      <div>
+        <div class="filename">Profit and Loss by ${DIM().One}: ${esc(titles[view])}</div>
+        <div class="muted small">${S.pl.period ? esc(S.pl.period) + ' · ' : ''}${changedCount} account${changedCount === 1 ? '' : 's'} changed · company total net income unchanged</div>
+      </div>
+      <div class="row-gap">
+        <div class="methods view-toggle" role="group" aria-label="View">
+          ${[['before', 'Before'], ['after', 'After posting'], ['change', 'Change']].map(([k, l]) => `<button class="seg ${k === view ? 'on' : ''}" aria-pressed="${k === view}" data-act="pl-view" data-view="${k}">${l}</button>`).join('')}
+        </div>
+        <button class="btn" data-act="dl-pl">Download Excel</button>
+      </div>
+    </div>
+    ${!je.lines.length ? '<p class="note">There are no journal entry lines yet, so this matches the upload. Set rules in step 2 to see the effect.</p>' : ''}
+    ${je.issues.length ? `<p class="error">${je.issues.length} account${je.issues.length === 1 ? ' isn’t' : 's aren’t'} in the entry because the rule needs fixing, so ${je.issues.length === 1 ? 'it shows' : 'they show'} unchanged here.</p>` : ''}
+    ${view === 'after' && je.lines.length ? '<p class="muted small">Shaded cells changed because of the entry. Hover a cell to see its before amount and the change.</p>' : ''}
+    <div class="scroll pl-scroll"><table class="grid pl">
+      <thead><tr><th class="l">Account</th>${c.map(k => `<th>${esc(k)}</th>`).join('')}<th>Total</th></tr></thead>
+      <tbody>${body}</tbody></table></div>
+    <div class="footer-nav">
+      <button class="btn" data-act="goto" data-step="3">Back to journal entry</button>
+    </div>`;
+}
+function downloadAfterPL() {
+  const { rows } = afterValues();
+  const c = S.pl.classes;
+  const wb = XLSX.utils.book_new();
+  [['after', 'After Posting'], ['before', 'Before'], ['change', 'Change']].forEach(([v, name]) => {
+    const aoa = [[`Profit and Loss by ${DIM().One}` + (S.pl.period ? ': ' + S.pl.period : '')], [name + (v === 'after' ? ' ' + (S.je.no || '') : '')], [], ['Account', ...c, 'Total']];
+    plStructure(rows, v).forEach(r => {
+      if (r.type === 'sec') aoa.push([r.label]);
+      else {
+        const label = r.type === 'acct' ? '   '.repeat(r.depth + 1) + r.label : r.label;
+        const vals = c.map(k => Math.round((r.vals[k] || 0) * 100) / 100);
+        aoa.push([label, ...vals, Math.round(vals.reduce((s, x) => s + x, 0) * 100) / 100]);
+      }
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{ wch: 40 }, ...c.map(() => ({ wch: 16 })), { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  offerFile(`PL-by-${DIM().one}-after-${(S.je.no || 'allocation').replace(/[^\w.-]+/g, '_')}.xlsx`, new Blob([buf]));
+}
+
+// ---------- Downloads & toast ----------
+let dlPromise = null;
+function getDownloads() {
+  if (!dlPromise) dlPromise = (window.claude && typeof window.claude.use === 'function') ? Promise.resolve(window.claude.use('downloads')).catch(() => null) : Promise.resolve(null);
+  return dlPromise;
+}
+async function offerFile(filename, data) {
+  const dl = await getDownloads();
+  if (dl) {
+    try { await dl.save({ filename, data }); toast('Downloaded ' + filename); }
+    catch (e) {
+      const code = e && e.code;
+      if (code === 'declined') return;
+      if (code === 'rate_limited') toast('A save prompt is already open. Try again in a moment.', true);
+      else toast('Downloads aren’t available in this view.', true);
+    }
+    return;
+  }
+  try {
+    const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/plain' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch (e) { toast('Downloads aren’t available in this view.', true); }
+}
+let toastT;
+function toast(msg, bad) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast show' + (bad ? ' bad' : '');
+  clearTimeout(toastT); toastT = setTimeout(() => t.className = 'toast', 3200);
+}
+
+// ---------- Global events ----------
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act],[data-pick],.step-btn');
+  if (!b) return;
+  if (b.classList.contains('step-btn')) { setStep(Number(b.dataset.step)); return; }
+  if (b.dataset.pick) { S.active = b.dataset.pick; renderAccountList(); renderEditor(); if (window.innerWidth < 900) $('#editor').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  const act = b.dataset.act;
+  if (act === 'sample') sampleData();
+  if (act === 'goto') setStep(Number(b.dataset.step));
+  if (act === 'add-basis') { const bs = { id: 'b' + uid(), name: '', pcts: {} }; S.bases.push(bs); saveBases(); renderBases(); const inp = document.querySelector(`tr[data-basis="${bs.id}"] [data-bname]`); inp && inp.focus(); }
+  if (act === 'del-basis') { const id = b.closest('tr').dataset.basis; S.bases = S.bases.filter(x => x.id !== id); saveBases(); renderBases(); renderAccountList(); renderEditor(); }
+  if (act === 'open-bases') { const d = $('#bases'); d.open = true; d.scrollIntoView({ behavior: 'smooth' }); }
+  if (act === 'even') {
+    const r = S.rules[S.active]; const others = S.pl.classes.filter(c => c !== r.source);
+    const share = Math.floor(10000 / others.length) / 100; r.pcts = {};
+    others.forEach((c, i) => r.pcts[c] = i === others.length - 1 ? Math.round((100 - share * (others.length - 1)) * 100) / 100 : share);
+    saveRules(); renderEditor(); renderAccountList();
+  }
+  if (act === 'copy-rule') copyRuleToSelected();
+  if (act === 'clear-selected') { S.selected.forEach(k => delete S.rules[k]); saveRules(); renderAccountList(); renderEditor(); toast('Rules cleared.'); }
+  if (act === 'sel-none') { S.selected.clear(); renderAccountList(); }
+  if (act === 'export-rules') exportRules();
+  if (act === 'dl-csv-gaccon') downloadCSV();
+  if (act === 'dl-csv-qb') downloadCSVQB();
+  if (act === 'set-dim') { setDim(b.dataset.dim); S.selected = new Set(); refreshNav(); renderUpload(); }
+  if (act === 'dl-xlsx') downloadXLSX();
+  if (act === 'dl-pl') downloadAfterPL();
+  if (act === 'pl-view') { S.plView = b.dataset.view; renderAfterPL(); }
+  if (act === 'fix') { S.active = b.dataset.acct; setStep(2); }
+});
+document.addEventListener('change', e => {
+  if (e.target.matches('input[data-sel]')) {
+    const k = e.target.dataset.sel; e.target.checked ? S.selected.add(k) : S.selected.delete(k); renderBulkbar();
+    const all = $('#sel-all'); if (all) all.checked = [...document.querySelectorAll('input[data-sel]')].every(x => x.checked);
+  }
+});
+document.addEventListener('input', e => {
+  const tr = e.target.closest('tr[data-basis]'); if (!tr) return;
+  const b = S.bases.find(x => x.id === tr.dataset.basis); if (!b) return;
+  if (e.target.matches('[data-bname]')) b.name = e.target.value;
+  if (e.target.matches('[data-bpct]')) { const c = e.target.dataset.bpct; if (e.target.value === '') delete b.pcts[c]; else b.pcts[c] = Number(e.target.value); }
+  saveBases();
+  const t = S.pl.classes.reduce((s, c) => s + (Number(b.pcts[c]) || 0), 0);
+  const cell = tr.querySelector('[data-btotal]'); cell.textContent = (Math.round(t * 100) / 100).toFixed(2) + '%'; cell.className = 'num ' + (Math.abs(t - 100) > 0.005 ? 'bad' : 'good');
+  renderAccountList(); renderEditor();
+});
+
+setDim(S.dim); setStep(1); refreshNav();
+</script>
+</body></html>
