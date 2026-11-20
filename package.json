@@ -1,0 +1,17 @@
+{
+  "name": "class-allocation",
+  "version": "1.0.0",
+  "description": "Class allocation tool for accounting",
+  "type": "module",
+  "scripts": {
+    "dev": "npx serve .",
+    "build": "echo 'No build step required for static site'",
+    "test": "echo 'No tests configured'"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vercel/speed-insights": "^2.1.0"
+  }
+}
